@@ -2,6 +2,57 @@
 
 # bin/compile <build-dir> <cache-dir> <env-dir>
 
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+set -o errexit
+set -o pipefail
+set -o nounset
+unset GIT_DIR
+
+function topic() {
+  echo "-----> $*..."
+}
+
+function indent() {
+  c='s/^/       /'
+  case $(uname) in
+    Darwin) sed -l "$c";;
+    *)      sed -u "$c";;
+  esac
+}
+
+BUILD_DIR=${1:-}
+CACHE_DIR=${2:-}
+ENV_DIR=${3:-}
+
+BIN_DIR=$BUILD_DIR/.chromedriver/bin
+mkdir -p $BIN_DIR
+
+if [ -f $ENV_DIR/CHROMEDRIVER_VERSION ]; then
+  VERSION=$(cat $ENV_DIR/CHROMEDRIVER_VERSION)
+  topic "Using chromedriver v${VERSION} (set by the env var 'CHROMEDRIVER_VERSION')"
+else
+  topic "Looking up latest chromedriver version"
+  LATEST="https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json"
+  VERSION=$(curl --silent --show-error --fail --retry 3 --retry-connrefused --connect-timeout 10 "${LATEST}" | jq -r '.channels.Stable.version')
+fi
+indent "Version $VERSION"
+
+topic "Downloading chromedriver v$VERSION"
+ZIP_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$VERSION/linux64/chromedriver-linux64.zip"
+ZIP_LOCATION="/tmp/chromedriver.zip"
+curl --silent --show-error --fail --retry 3 --retry-connrefused --connect-timeout 10 -o "${ZIP_LOCATION}" "${ZIP_URL}"
+unzip -j -o $ZIP_LOCATION -d $BIN_DIR
+rm -f $ZIP_LOCATION
+indent "Downloaded"
+
+topic "Creating chromedriver export scripts"
+mkdir -p $BUILD_DIR/.profile.d
+echo "export PATH=\$PATH:\$HOME/.chromedriver/bin" >> $BUILD_DIR/.profile.d/chromedriver.sh
+indent "Created"
+
+
 # fail hard
 set -o pipefail
 # fail harder
